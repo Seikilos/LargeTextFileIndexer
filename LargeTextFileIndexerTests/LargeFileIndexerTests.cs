@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
+using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using FluentAssertions;
 using Seikilos.LargeTextFileIndexerLib;
@@ -26,6 +29,12 @@ namespace Seikilos.LargeTextFileIndexerTests
 
             outStream.Position = 0;
 
+            return ParseStream(outStream);
+
+        }
+
+        private List<long> ParseStream(Stream outStream)
+        {
             using var outBinReader = new BinaryReader(outStream);
 
             var ints = new List<long>();
@@ -168,5 +177,59 @@ namespace Seikilos.LargeTextFileIndexerTests
             // Assert
             a.Should().NotThrow();
         }
+
+        [InlineData(12356)]
+        [Theory]
+        public async Task Test_Large_Files(int seed)
+        {
+            // Arrange
+            var rand = new Random(seed);
+            var lines = rand.Next(3163,134353);
+            var str = makeLargeString(rand, lines);
+
+            var sut = new LargeFileIndexer();
+            await using var outIndexStream = new MemoryStream();
+
+            // Act
+            await sut.IndexAsync(str, outIndexStream).ConfigureAwait(false);
+            outIndexStream.Position = 0;
+            var linesParsed = ParseStream(outIndexStream);
+
+            // Assert
+            linesParsed.Count.Should().Be(lines);
+
+        }
+
+        private Stream makeLargeString(Random rand, int lines)
+        {
+            var stringStream = new MemoryStream();
+            var sw = new StreamWriter(stringStream);
+            for (var i = 0; i < lines; ++i)
+            {
+                sw.Write(RandomString(rand, rand.Next(1,4949)));
+                if (rand.NextDouble() < 0.5)
+                {
+                    sw.Write("\r\n");
+                }
+                else
+                {
+                    sw.Write("\n");
+                }
+            }
+
+            sw.Flush();
+
+            stringStream.Position = 0;
+            return stringStream;
+
+        }
+
+        public static string RandomString(Random random, int length)
+        {
+            const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+            return new string(Enumerable.Repeat(chars, length)
+                .Select(s => s[random.Next(s.Length)]).ToArray());
+        }
+
     }
 }
