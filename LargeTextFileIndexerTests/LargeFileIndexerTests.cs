@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
@@ -120,6 +121,52 @@ namespace Seikilos.LargeTextFileIndexerTests
             // Assert
             result.Count.Should().Be(0);
            
+        }
+
+        [Fact]
+        public void Test_Input_File_Must_Exist()
+        {
+            // Arrange
+            
+
+            // Act
+            Func<Task> a = async () => await new LargeFileIndexer().IndexAsync("do_not_Exist", "output_file").ConfigureAwait(false);
+
+            // Assert
+            a.Should().Throw<FileNotFoundException>().WithMessage("do_not_Exist");
+        }
+
+        [Fact]
+        public async Task Test_Output_File_Has_Non_Zero_Size()
+        {
+            // Arrange
+            File.WriteAllText("input.txt", "some content");
+
+            // Act
+            await new LargeFileIndexer().IndexAsync("input.txt", "output.bin").ConfigureAwait(false);
+            var fi = new FileInfo("output.bin");
+
+            // Assert
+            fi.Length.Should().BeGreaterThan(0);
+        }
+
+
+        [Fact]
+        public void Test_Output_File_Is_Overwritten()
+        {
+            // Arrange
+            File.WriteAllText("input.txt", "some content");
+
+            // Act
+            Func<Task> a = async () =>
+            {
+                await new LargeFileIndexer().IndexAsync("input.txt", "output.bin").ConfigureAwait(false);
+                await new LargeFileIndexer().IndexAsync("input.txt", "output.bin").ConfigureAwait(false);
+
+            };
+
+            // Assert
+            a.Should().NotThrow();
         }
     }
 }
