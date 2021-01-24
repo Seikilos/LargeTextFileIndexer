@@ -207,13 +207,16 @@ namespace Seikilos.LargeTextFileIndexerTests
             for (var i = 0; i < lines; ++i)
             {
                 sw.Write(RandomString(rand, rand.Next(1,4949)));
-                if (rand.NextDouble() < 0.5)
+                if (i < lines - 1)
                 {
-                    sw.Write("\r\n");
-                }
-                else
-                {
-                    sw.Write("\n");
+                    if (rand.NextDouble() < 0.5)
+                    {
+                        sw.Write("\r\n");
+                    }
+                    else
+                    {
+                        sw.Write("\n");
+                    }
                 }
             }
 
