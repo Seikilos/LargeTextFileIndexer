@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Linq.Expressions;
 using System.Text;
 using System.Threading.Tasks;
@@ -68,11 +69,33 @@ namespace Seikilos.LargeTextFileIndexerTests
 
             // Assert
             sut[0].Should().Be("Hello");
+            sut[1].Should().Be("World");
             sut[2].Should().Be("String");
 
             inStream.Dispose();
             indexStream.Dispose();
         }
+
+
+        [Fact]
+        public async Task Test_Access_Accesses_Stream_Small_Buffer()
+        {
+            // Arrange
+            var (inStream, indexStream) = await this.MakeStreamFromData("Hello\nWorld\nString").ConfigureAwait(false);
+
+            // Act
+            var sut = new LargeFileIndexerAccess(inStream, indexStream, 4);
+
+            // Assert
+            sut[0].Should().Be("Hello");
+            sut[1].Should().Be("World");
+            sut[2].Should().Be("String");
+
+            inStream.Dispose();
+            indexStream.Dispose();
+        }
+
+
 
         [Fact]
         public async Task Test_Access_Accesses_File()
@@ -134,17 +157,35 @@ namespace Seikilos.LargeTextFileIndexerTests
         }
 
 
-        [Fact]
-        public async Task Test_Large_File()
+        [InlineData(30)]
+        [InlineData(199999)]
+        [Theory]
+        public async Task Test_Large_File(int lines)
         {
             // Arrange
             var rand = new Random(12323);
             var data = new List<string>();
-            var lines = 199999;
+          
             for (var i = 0; i < lines; ++i)
             {
                 data.Add(TestUtils.RandomString(rand, rand.Next(40,1000)));
             }
+
+            var sb = new StringBuilder();
+            for (var i = 0; i < lines - 1; ++i)
+            {
+                sb.Append(data[i]);
+                if (rand.NextDouble() < 0.5)
+                {
+                    sb.Append("\r\n");
+                }
+                else
+                {
+                    sb.Append("\n");
+                }
+            }
+
+            sb.Append(data.Last());
 
             var (inStream, indexStream) = await this.MakeStreamFromData(string.Join(Environment.NewLine, data)).ConfigureAwait(false);
 

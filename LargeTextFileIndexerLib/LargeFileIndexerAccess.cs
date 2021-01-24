@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 
 namespace Seikilos.LargeTextFileIndexerLib
 {
@@ -17,8 +18,12 @@ namespace Seikilos.LargeTextFileIndexerLib
         private List<long> _lines;
         private StreamReader _streamReader;
 
+        private int BufferSize = 1024;
+        private char[] _buffer;
+        private int _bufferPosition = 0;
 
-        public LargeFileIndexerAccess(string inputFile, string indexFile)
+
+        public LargeFileIndexerAccess(string inputFile, string indexFile, int bufferSize = -1)
         {
             if (File.Exists(inputFile) == false)
             {
@@ -33,13 +38,13 @@ namespace Seikilos.LargeTextFileIndexerLib
             _internalInputStream = File.OpenRead(inputFile);
             _internalIndexStream = File.OpenRead(indexFile);
 
-            InitStream(_internalInputStream, _internalIndexStream);
+            InitStream(_internalInputStream, _internalIndexStream, bufferSize);
         }
 
 
-        public LargeFileIndexerAccess(Stream inStream, Stream indexStream)
+        public LargeFileIndexerAccess(Stream inStream, Stream indexStream, int bufferSize = -1)
         {
-            InitStream(inStream, indexStream);
+            InitStream(inStream, indexStream, bufferSize);
         }
 
         public void Dispose()
@@ -69,10 +74,20 @@ namespace Seikilos.LargeTextFileIndexerLib
             get => _lines.Count;
         }
 
-        private void InitStream(Stream inStream, Stream indexStream)
+        private void InitStream(Stream inStream, Stream indexStream, int bufferSize)
         {
+            if (bufferSize == -1)
+            {
+                BufferSize = 1024;
+            }
+            else
+            {
+                BufferSize = bufferSize;
+            }
             _inStream = inStream ?? throw new ArgumentNullException(nameof(inStream));
             _streamReader = new StreamReader(_inStream);
+
+            _buffer = new char[BufferSize];
 
             if (indexStream == null)
             {
@@ -80,6 +95,8 @@ namespace Seikilos.LargeTextFileIndexerLib
             }
 
             BuildIndex(indexStream);
+
+            _streamReader.ReadBlock(_buffer, _bufferPosition, BufferSize);
         }
 
         private void BuildIndex(Stream indexStream)
@@ -108,6 +125,25 @@ namespace Seikilos.LargeTextFileIndexerLib
                 throw new IndexOutOfRangeException($"Index {line} is out of range. Element count is {_lines.Count}");
             }
 
+            // Check if current buffer already contains the start position
+            var lineStart = _lines[line];
+            if (lineStart >= _bufferPosition && lineStart < _bufferPosition + BufferSize)
+            {
+                // lineStart is in buffer
+
+            }
+            else
+            {
+                // lineStart is not in buffer, advance
+                _bufferPosition = (int) lineStart;
+
+                _streamReader.ReadBlock(_buffer, _bufferPosition, BufferSize);
+            }
+
+            return readFromStream(lineStart);
+            // Read stream until \r\n or \n found, mo
+
+
             _inStream.Seek(_lines[line], SeekOrigin.Begin);
             
             // This is extremely inefficient
@@ -116,6 +152,34 @@ namespace Seikilos.LargeTextFileIndexerLib
             var str = _streamReader.ReadLine();
 
             return str;
+        }
+
+        private string readFromStream(long index)
+        {
+            var sb = new StringBuilder();
+
+            while (true)
+            {
+                if (index > (_bufferPosition + BufferSize))
+                {
+                    _bufferPosition = (int)index;
+                    _streamReader.ReadBlock(_buffer, _bufferPosition, BufferSize);
+                }
+
+                var nextChar = _buffer[index%BufferSize];
+
+                ++index;
+
+                if (nextChar == '\n' || nextChar == '\0')
+                {
+                    _bufferPosition = (int)index;
+                    return sb.ToString();
+                }
+
+                sb.Append(nextChar);
+            }
+            
+
         }
 
         internal class AccessorEnumerator : IEnumerator<string>
