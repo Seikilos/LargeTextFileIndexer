@@ -18,9 +18,10 @@ namespace Seikilos.LargeTextFileIndexerLib
         private List<long> _lines;
         private StreamReader _streamReader;
 
-        private int BufferSize = 1024;
+        private int _bufferSize = 1024;
         private char[] _buffer;
-        private int _bufferPosition = 0;
+        private long _bufferPosition = 0;
+        private long _bytesRead;
 
 
         public LargeFileIndexerAccess(string inputFile, string indexFile, int bufferSize = -1)
@@ -78,16 +79,17 @@ namespace Seikilos.LargeTextFileIndexerLib
         {
             if (bufferSize == -1)
             {
-                BufferSize = 1024;
+                _bufferSize = 1024;
             }
             else
             {
-                BufferSize = bufferSize;
+                _bufferSize = bufferSize;
             }
             _inStream = inStream ?? throw new ArgumentNullException(nameof(inStream));
             _streamReader = new StreamReader(_inStream);
+            
 
-            _buffer = new char[BufferSize];
+            _buffer = new char[_bufferSize];
 
             if (indexStream == null)
             {
@@ -96,7 +98,7 @@ namespace Seikilos.LargeTextFileIndexerLib
 
             BuildIndex(indexStream);
 
-            _streamReader.ReadBlock(_buffer, _bufferPosition, BufferSize);
+            moveStreamAndRead(0);
         }
 
         private void BuildIndex(Stream indexStream)
@@ -127,7 +129,7 @@ namespace Seikilos.LargeTextFileIndexerLib
 
             // Check if current buffer already contains the start position
             var lineStart = _lines[line];
-            if (lineStart >= _bufferPosition && lineStart < _bufferPosition + BufferSize)
+            if (lineStart >= _bufferPosition && lineStart < _bufferPosition + _bufferSize)
             {
                 // lineStart is in buffer
 
@@ -135,9 +137,12 @@ namespace Seikilos.LargeTextFileIndexerLib
             else
             {
                 // lineStart is not in buffer, advance
+
+                moveStreamAndRead(lineStart);
+                
                 _bufferPosition = (int) lineStart;
 
-                _streamReader.ReadBlock(_buffer, _bufferPosition, BufferSize);
+              
             }
 
             return readFromStream(lineStart);
@@ -154,32 +159,43 @@ namespace Seikilos.LargeTextFileIndexerLib
             return str;
         }
 
+        private void moveStreamAndRead(long fromPosition)
+        {
+            _inStream.Seek(fromPosition, SeekOrigin.Begin);
+            _bufferPosition = fromPosition;
+            _streamReader.DiscardBufferedData();
+            _bytesRead += _streamReader.ReadBlock(_buffer, 0, _bufferSize);
+        }
+
         private string readFromStream(long index)
         {
             var sb = new StringBuilder();
 
-            while (true)
+            while (index <= _bytesRead)
             {
-                if (index > (_bufferPosition + BufferSize))
+                if (index >= (_bufferPosition + _bufferSize))
                 {
-                    _bufferPosition = (int)index;
-                    _streamReader.ReadBlock(_buffer, _bufferPosition, BufferSize);
+                    moveStreamAndRead(index);
                 }
 
-                var nextChar = _buffer[index%BufferSize];
+                var nextChar = _buffer[index%_bufferSize];
 
                 ++index;
+                
 
                 if (nextChar == '\n' || nextChar == '\0')
                 {
-                    _bufferPosition = (int)index;
                     return sb.ToString();
                 }
 
-                sb.Append(nextChar);
-            }
-            
+                if (nextChar != '\r')
+                {
+                    sb.Append(nextChar);
+                }
 
+            }
+
+            return sb.ToString();
         }
 
         internal class AccessorEnumerator : IEnumerator<string>

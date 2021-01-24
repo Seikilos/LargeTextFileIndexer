@@ -76,6 +76,29 @@ namespace Seikilos.LargeTextFileIndexerTests
             indexStream.Dispose();
         }
 
+        [Fact]
+        public async Task Test_Access_Accesses_Stream_Repeatedly()
+        {
+            // Arrange
+            var (inStream, indexStream) = await this.MakeStreamFromData("Hello\nWorld\nString").ConfigureAwait(false);
+
+            // Act
+            var sut = new LargeFileIndexerAccess(inStream, indexStream);
+
+            // Assert
+            sut[0].Should().Be("Hello");
+            sut[1].Should().Be("World");
+            sut[2].Should().Be("String");
+            
+            sut[0].Should().Be("Hello");
+            sut[2].Should().Be("String");
+
+
+            inStream.Dispose();
+            indexStream.Dispose();
+        }
+
+
 
         [Fact]
         public async Task Test_Access_Accesses_Stream_Small_Buffer()
@@ -95,6 +118,48 @@ namespace Seikilos.LargeTextFileIndexerTests
             indexStream.Dispose();
         }
 
+
+
+        [Fact]
+        public async Task Test_Access_Accesses_Stream_Repeatedly_Small_Buffer()
+        {
+            // Arrange
+            var (inStream, indexStream) = await this.MakeStreamFromData("Hello\nWorld\nString").ConfigureAwait(false);
+
+            // Act
+            var sut = new LargeFileIndexerAccess(inStream, indexStream, 4);
+
+            // Assert
+            sut[0].Should().Be("Hello");
+            sut[1].Should().Be("World");
+            sut[2].Should().Be("String");
+
+            sut[0].Should().Be("Hello");
+            sut[2].Should().Be("String");
+
+
+            inStream.Dispose();
+            indexStream.Dispose();
+        }
+
+
+        [Fact]
+        public async Task Test_Access_Accesses_Stream_Small_Buffer_Mixed_New_Lines()
+        {
+            // Arrange
+            var (inStream, indexStream) = await this.MakeStreamFromData("Hello\r\nWorld\nString").ConfigureAwait(false);
+
+            // Act
+            var sut = new LargeFileIndexerAccess(inStream, indexStream, 4);
+
+            // Assert
+            sut[0].Should().Be("Hello");
+            sut[1].Should().Be("World");
+            sut[2].Should().Be("String");
+
+            inStream.Dispose();
+            indexStream.Dispose();
+        }
 
 
         [Fact]
@@ -197,7 +262,7 @@ namespace Seikilos.LargeTextFileIndexerTests
             // Assert
             for (var i = 0; i < lines; ++i)
             {
-                sut[i].Should().Be(data[i]);
+                sut[i].Should().Be(data[i], $"Line {i} must be equal");
             }
             
 
